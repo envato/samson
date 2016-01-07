@@ -63,6 +63,7 @@ module Samson
     config.samson.ldap.port = ENV["LDAP_PORT"].presence
     config.samson.ldap.base = ENV["LDAP_BASE"].presence
     config.samson.ldap.uid = ENV["LDAP_UID"].presence
+    config.samson.ldap.bind_dn = ENV["LDAP_BINDDN"].presence
     config.samson.ldap.password = ENV["LDAP_PASSWORD"].presence
 
     config.samson.auth = ActiveSupport::OrderedOptions.new
@@ -73,7 +74,12 @@ module Samson
     config.samson.docker = ActiveSupport::OrderedOptions.new
     config.samson.docker.registry = ENV['DOCKER_REGISTRY'].presence
 
-    config.samson.uri = URI( ENV["DEFAULT_URL"] || 'http://localhost:3000' )
+    config.samson.uri = URI(ENV["DEFAULT_URL"] || 'http://localhost:3000')
+    config.sse_rails_engine.access_control_allow_origin = config.samson.uri.to_s
+
+    config.samson.stream_origin = ENV['STREAM_ORIGIN'].presence || config.samson.uri.to_s
+    config.samson.deploy_origin = ENV['DEPLOY_ORIGIN'].presence || config.samson.uri.to_s
+
     self.default_url_options = {
       host: config.samson.uri.host,
       protocol: config.samson.uri.scheme
@@ -81,13 +87,28 @@ module Samson
 
     config.action_controller.action_on_unpermitted_parameters = :raise
 
-    config.after_initialize do
-      # Token used to request badges
-      unless ENV['PRECOMPILE']
+    if !Rails.env.test? && ENV['SERVER_MODE'] && !ENV['PRECOMPILE']
+      initializer :execute_job, after: :set_routes_reloader_hook do # flowdock uses routes: run after the routes are loaded
+        JobExecution.enabled = true
+        Job.running.each(&:stop!)
+        Job.non_deploy.pending.each do |job|
+          JobExecution.start_job(JobExecution.new(job.commit, job))
+        end
+        Deploy.active.each do |deploy|
+          deploy.pending_start! if deploy.pending_non_production?
+        end
+        RestartSignalHandler.listen
+        Samson::Tasks::LockCleaner.start
+      end
+    end
+
+    unless ENV['PRECOMPILE']
+      config.after_initialize do
+        # Token used to request badges
         config.samson.badge_token = Digest::MD5.hexdigest('badge_token' << Samson::Application.config.secret_key_base)
       end
     end
   end
 end
 
-require "samson/hooks"
+require 'samson/hooks'

@@ -3,7 +3,7 @@ module Kubernetes
     attr_reader :filepath, :api_version, :clusters, :users, :contexts
 
     def initialize(filepath)
-      raise ArgumentError("File #{filepath} does not exist") unless File.exists?(filepath)
+      raise ArgumentError.new("File #{filepath} does not exist") unless File.exists?(filepath)
       @filepath = filepath
       @config_file = YAML.load_file(filepath).with_indifferent_access
       parse_file
@@ -19,6 +19,10 @@ module Kubernetes
 
     def client_for(context_name)
       contexts[context_name].try(:client)
+    end
+
+    def extension_client_for(context_name)
+      contexts[context_name].try(:extension_client)
     end
 
     def context_names
@@ -41,7 +45,13 @@ module Kubernetes
         cluster = Cluster.new
         cluster.name = cluster_hash[:name]
         cluster.server = cluster_hash[:cluster][:server]
-        cluster.ca_data = cluster_hash[:cluster][:'certificate-authority-data']
+        ca_data = cluster_hash[:cluster][:'certificate-authority-data']
+        if ca_data
+          cluster.cert_store = OpenSSL::X509::Store.new
+          cluster.cert_store.add_cert(OpenSSL::X509::Certificate.new(Base64.decode64(ca_data)))
+        else
+          cluster.cert_store = nil
+        end
         @clusters[cluster.name] = cluster
       end
     end
@@ -84,19 +94,10 @@ module Kubernetes
     end
 
     class Cluster
-      attr_accessor :name, :server, :ca_data
+      attr_accessor :name, :server, :cert_store
 
       def url
         server + '/api/'
-      end
-
-      def ca_filepath
-        @ca_filepath ||= begin
-          tmpfile = Tempfile.new(['ca', '.crt'])
-          tmpfile.write(Base64.decode64(ca_data))
-          tmpfile.close
-          tmpfile.path
-        end
       end
     end
 
@@ -107,8 +108,12 @@ module Kubernetes
         Kubeclient::Client.new(cluster.url, api_version, ssl_options: ssl_options)
       end
 
+      def extension_client
+        Kubeclient::Client.new(cluster.server + '/apis', 'extensions/v1beta1', ssl_options: ssl_options)
+      end
+
       def use_ssl?
-        cluster.ca_data.present? && user.client_cert.present?
+        cluster.cert_store.present? && user.client_cert.present?
       end
 
       def ssl_options
@@ -117,7 +122,7 @@ module Kubernetes
         {
           client_cert: user.client_cert,
           client_key:  user.client_key,
-          ca_file:     cluster.ca_filepath,
+          cert_store:  cluster.cert_store,
           verify_ssl:  OpenSSL::SSL::VERIFY_PEER
         }
       end

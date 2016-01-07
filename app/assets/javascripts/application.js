@@ -14,6 +14,11 @@
 //= require jquery-ujs
 //= require angular
 //= require angular-rails-templates
+//= require angular-ui-router
+//= require angular-ui-bootstrap-bower
+//= require spin
+//= require angular-spinner
+//= require angular-truncate-2
 //= require underscore
 //= require moment
 //= require bootstrap/alert
@@ -29,6 +34,6 @@
 //= require rickshaw
 //= require vis
 //= require app
-//= require config
+//= require underscore_mixins
 //= require_tree .
 //= require_tree ../templates

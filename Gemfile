@@ -27,7 +27,7 @@ gem 'dalli', '~> 2.7.0'
 gem 'active_model_serializers', '~> 0.8.0'
 
 gem 'sawyer', '~> 0.5'
-gem 'sse-rails-engine'
+gem 'sse-rails-engine', '~> 1.4'
 
 # Logging
 gem 'lograge'
@@ -35,9 +35,6 @@ gem 'logstash-event'
 
 # Docker
 gem 'docker-api'
-
-# Temporary until kubeclient changes get merged into the upstream project
-gem 'kubeclient', github: 'zendesk/kubeclient', branch: 'samson-gem-branch'
 
 group :production, :staging do
   gem 'rails_12factor'
@@ -56,6 +53,9 @@ group :assets do
     gem 'rails-assets-angular'
     gem 'rails-assets-angular-mocks'
     gem 'rails-assets-angular-scenario'
+    gem 'rails-assets-angular-ui-bootstrap-bower'
+    gem 'rails-assets-spin'
+    gem 'rails-assets-angular-spinner'
     gem 'rails-assets-bootstrap-select'
     gem 'rails-assets-font-awesome', '~> 4.3.0'
     gem 'rails-assets-jquery'
@@ -68,6 +68,8 @@ group :assets do
     gem 'rails-assets-vis'
     gem 'rails-assets-x-editable'
     gem 'rails-assets-message-center'
+    gem 'rails-assets-angular-ui-router'
+    gem 'rails-assets-angular-truncate-2'
   end
 end
 
@@ -88,7 +90,9 @@ group :no_preload do
   gem 'coderay', '~> 1.1.0'
   gem 'dogapi', '~> 1.9'
   gem 'net-http-persistent'
-  Dir["plugins/*/"].each { |f| gemspec path: f, require: false } # treat included plugins like gems
+  gem 'concurrent-ruby'
+
+  Dir[File.join(Bundler.root, 'plugins/*/')].each { |f| gemspec path: f, require: false } # treat included plugins like gems
 end
 
 group :development, :staging do

@@ -24,7 +24,9 @@ module Samson
       :before_docker_build,
       :after_docker_build,
       :after_job_execution,
-      :job_additional_vars
+      :job_additional_vars,
+      :deploy_group_permitted_params,
+      :edit_deploy_group
     ].freeze
 
     INTERNAL_HOOKS = [ :class_defined ]
@@ -129,7 +131,9 @@ module Samson
 
       # use
       def fire(name, *args)
-        hooks(name).map { |hook| hook.call(*args) }
+        NewRelic::Agent::MethodTracerHelpers.trace_execution_scoped("Custom/Hooks/#{name}") do
+          hooks(name).map { |hook| hook.call(*args) }
+        end
       end
 
       def render_views(name, view, *args)
@@ -228,3 +232,4 @@ end
 Samson::Hooks.plugin_setup
 ActiveRecord::Base.extend Samson::LoadDecorators
 ActionController::Base.extend Samson::LoadDecorators
+ActiveModel::Serializer.extend Samson::LoadDecorators

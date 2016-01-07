@@ -21,6 +21,8 @@ require 'thread_safe'
 #   listener2.value #=> "hello world!"
 #
 class OutputBuffer
+  attr_reader :listeners
+
   def initialize
     @listeners = ThreadSafe::Array.new
     @previous = ThreadSafe::Array.new
@@ -33,7 +35,7 @@ class OutputBuffer
 
   def write(data, event = :message)
     @previous << [event, data] unless event == :close
-    @listeners.each {|listener| listener.push([event, data]) }
+    @listeners.dup.each {|listener| listener.push([event, data]) }
   end
 
   def include?(event, data)

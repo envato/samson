@@ -2,13 +2,13 @@ module StatusHelper
   ALERT_STATUS_MAPPING = {
     "succeeded" => "success",
     "failed" => "danger",
+    "errored" => "danger",
     "cancelling" => "warning",
     "cancelled" => "danger"
   }
 
   LABEL_STATUS_MAPPING = ALERT_STATUS_MAPPING.merge(
-    "running" => "primary",
-    "pending" => "default"
+    "running" => "primary"
   )
 
   def status_alert(key)

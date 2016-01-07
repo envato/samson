@@ -8,7 +8,12 @@ class DeploysController < ApplicationController
   before_action :stage, only: :new
 
   def index
-    @deploys = current_project.deploys.page(params[:page])
+    scope = current_project.try(:deploys) || Deploy
+    @deploys = if params[:ids]
+      Kaminari.paginate_array(scope.find(params[:ids])).page(1).per(1000)
+    else
+      scope.page(params[:page])
+    end
 
     respond_to do |format|
       format.html
@@ -56,7 +61,7 @@ class DeploysController < ApplicationController
       end
 
       format.json do
-        render json: {}, status: @deploy.persisted? ? 200 : 422
+        render json: @deploy.to_json, status: @deploy.persisted? ? :created : 422, location: [current_project, @deploy]
       end
     end
   end

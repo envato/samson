@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20151013181500) do
+ActiveRecord::Schema.define(version: 20151211031950) do
 
   create_table "build_statuses", force: :cascade do |t|
     t.integer  "build_id",                                     null: false
@@ -60,9 +60,11 @@ ActiveRecord::Schema.define(version: 20151013181500) do
     t.datetime "created_at",                 null: false
     t.datetime "updated_at",                 null: false
     t.string   "env_value",      limit: 255, null: false
+    t.string   "permalink",      limit: 255, null: false
   end
 
   add_index "deploy_groups", ["environment_id"], name: "index_deploy_groups_on_environment_id", using: :btree
+  add_index "deploy_groups", ["permalink"], name: "index_deploy_groups_on_permalink", unique: true, length: {"permalink"=>191}, using: :btree
 
   create_table "deploy_groups_stages", id: false, force: :cascade do |t|
     t.integer "deploy_group_id", limit: 4
@@ -177,41 +179,32 @@ ActiveRecord::Schema.define(version: 20151013181500) do
   end
 
   create_table "kubernetes_release_docs", force: :cascade do |t|
-    t.integer  "kubernetes_role_id",          limit: 4,     null: false
-    t.integer  "kubernetes_release_id",       limit: 4,     null: false
-    t.integer  "replica_count",               limit: 4,     null: false
+    t.integer  "kubernetes_role_id",          limit: 4,                         null: false
+    t.integer  "kubernetes_release_id",       limit: 4,                         null: false
+    t.integer  "replica_target",              limit: 4,                         null: false
+    t.integer  "replicas_live",               limit: 4,     default: 0,         null: false
     t.string   "replication_controller_name", limit: 255
     t.text     "replication_controller_doc",  limit: 65535
-    t.string   "status",                      limit: 255
+    t.string   "status",                      limit: 255,   default: "created"
     t.datetime "created_at"
     t.datetime "updated_at"
+    t.integer  "deploy_group_id"
   end
 
   add_index "kubernetes_release_docs", ["kubernetes_release_id"], name: "index_kubernetes_release_docs_on_kubernetes_release_id", using: :btree
   add_index "kubernetes_release_docs", ["kubernetes_role_id"], name: "index_kubernetes_release_docs_on_kubernetes_role_id", using: :btree
 
-  create_table "kubernetes_release_groups", force: :cascade do |t|
-    t.integer  "build_id",   limit: 4,     null: false
-    t.integer  "user_id",    limit: 4
-    t.text     "comment",    limit: 65535
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  add_index "kubernetes_release_groups", ["build_id"], name: "index_kubernetes_release_groups_on_build_id", using: :btree
-
   create_table "kubernetes_releases", force: :cascade do |t|
-    t.integer  "kubernetes_release_group_id", limit: 4,   null: false
-    t.integer  "deploy_group_id",             limit: 4,   null: false
-    t.string   "status",                      limit: 255
+    t.string   "status",             default: "created"
     t.datetime "deploy_finished_at"
     t.datetime "destroyed_at"
     t.datetime "created_at"
     t.datetime "updated_at"
+    t.integer  "build_id"
+    t.integer  "user_id"
   end
 
-  add_index "kubernetes_releases", ["deploy_group_id"], name: "index_kubernetes_releases_on_deploy_group_id", using: :btree
-  add_index "kubernetes_releases", ["kubernetes_release_group_id"], name: "index_kubernetes_releases_on_kubernetes_release_group_id", using: :btree
+  add_index "kubernetes_releases", ["build_id"], name: "index_kubernetes_releases_on_build_id"
 
   create_table "kubernetes_roles", force: :cascade do |t|
     t.integer  "project_id",      limit: 4,                           null: false
@@ -224,6 +217,7 @@ ActiveRecord::Schema.define(version: 20151013181500) do
     t.string   "deploy_strategy", limit: 255,                         null: false
     t.datetime "created_at",                                          null: false
     t.datetime "updated_at",                                          null: false
+    t.datetime "deleted_at"
   end
 
   add_index "kubernetes_roles", ["project_id"], name: "index_kubernetes_roles_on_project_id", using: :btree
@@ -235,7 +229,8 @@ ActiveRecord::Schema.define(version: 20151013181500) do
     t.datetime "updated_at"
     t.datetime "deleted_at"
     t.string   "description", limit: 255
-    t.boolean  "warning",     default: false, null: false
+    t.boolean  "warning",                 default: false, null: false
+    t.datetime "delete_at"
   end
 
   add_index "locks", ["stage_id", "deleted_at", "user_id"], name: "index_locks_on_stage_id_and_deleted_at_and_user_id", using: :btree

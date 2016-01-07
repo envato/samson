@@ -1,43 +1,25 @@
 class KubernetesReleasesController < ApplicationController
-  helper ProjectsHelper
+  include ProjectLevelAuthorization
 
-  before_action :project
-  before_action :authorize_deployer!
-  before_action :load_environments, only: [:new, :create]
+  before_action :authorize_project_deployer!
 
   def index
-    @kuber_release_list = project.kubernetes_releases.order('id desc')
+    render json: current_project.kubernetes_releases.order('id desc'), root: false
   end
 
-  def new
-    @kubernetes_release = Kubernetes::Release.new(user: current_user, build_id: params[:build_id])
-  end
-
-  def show
-    @kubernetes_release = Kubernetes::Release.find(params[:id])
-  end
-
-  def build
-    @build = Build.find(params[:build_id])
-    @kuber_release_list = @build.kubernetes_releases.order('id desc')
+  def create
+    release = Kubernetes::Release.create_release(release_params)
+    if release.persisted?
+      render status: :created, json: release
+    else
+      render status: :bad_request, json: { errors: release.errors.full_messages }
+    end
   end
 
   private
 
-  def project
-    @project ||= Project.find_by_param!(params[:project_id])
-  end
-  helper_method :project
-
-  def new_params
-    params.permit(:build_id)
-  end
-
-  def create_params
-    params.require(:kubernetes_release).permit(:build_id)
-  end
-
-  def load_environments
-    @environments = Environment.all
+  def release_params
+    params.require(:kubernetes_release).permit(:build_id, deploy_groups: [:id, roles: [:id, :replicas]])
+      .merge(user: current_user)
   end
 end

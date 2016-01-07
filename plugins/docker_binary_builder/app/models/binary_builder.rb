@@ -84,7 +84,7 @@ class BinaryBuilder
     api_version_major, api_version_minor = docker_api_version.scan(/(\d+)\.(\d+)/).flatten.map(&:to_i)
     if api_version_major == 0 || (api_version_major == 1 && api_version_minor <= 14)
       fail "Unsupported Docker api version '#{docker_api_version}', use at least v1.15"
-    elsif api_version_major == 1 && api_version_minor <= 19
+    elsif api_version_major == 1 && api_version_minor <= 20
       options.merge!(
         {
           'Volumes' => {
@@ -116,7 +116,7 @@ class BinaryBuilder
   end
 
   def image_name
-    "#{@project.send(:permalink_base)}_build:#{@git_reference}"
+    "#{@project.send(:permalink_base)}_build:#{@git_reference}".downcase
   end
 
   def create_build_image

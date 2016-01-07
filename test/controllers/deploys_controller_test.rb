@@ -31,6 +31,24 @@ describe DeploysController do
         assert_response :ok
         assert_equal "application/json", @response.content_type
       end
+
+      it "renders without a project" do
+        get :index
+        assert_template :index
+        assigns[:deploys].must_equal Deploy.all.to_a
+      end
+
+      it "renders with given ids" do
+        get :index, ids: [deploy.id]
+        assert_template :index
+        assigns[:deploys].must_equal [deploy]
+      end
+
+      it "fails when given ids do not exist" do
+        assert_raises ActiveRecord::RecordNotFound do
+          get :index, ids: [121211221]
+        end
+      end
     end
 
     describe "a GET to :recent" do
@@ -210,8 +228,8 @@ describe DeploysController do
       describe "as json" do
         let(:format) { :json }
 
-        it "responds ok" do
-          assert_response :ok
+        it "responds created" do
+          assert_response :created
         end
 
         it "creates a deploy" do
@@ -340,8 +358,8 @@ describe DeploysController do
       describe "as json" do
         let(:format) { :json }
 
-        it "responds ok" do
-          assert_response :ok
+        it "responds created" do
+          assert_response :created
         end
 
         it "creates a deploy" do
