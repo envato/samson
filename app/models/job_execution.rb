@@ -84,7 +84,7 @@ class JobExecution
   end
 
   def error!(exception)
-    message = "JobExecution failed: #{exception.message}"
+    message = "JobExecution failed: #{exception.message}\n#{exception.backtrace}"
 
     if !exception.is_a?(Samson::Hooks::UserError)
       Airbrake.notify(exception,
