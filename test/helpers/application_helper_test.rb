@@ -74,7 +74,16 @@ describe ApplicationHelper do
     it "does not allow XSS" do
       result = markdown("<script>alert(1)</script>")
       result.must_equal "alert(1)\n"
-      assert result.html_safe?
+    end
+
+    it "allows strike-through" do
+      result = markdown("Hey ~~FOO~~ bar")
+      result.must_equal "<p>Hey <del>FOO</del> bar</p>\n"
+    end
+
+    it "supports nil" do
+      result = markdown(nil)
+      result.must_equal ""
     end
   end
 

@@ -221,7 +221,7 @@ describe Kubernetes::DeployExecutor do
       end
 
       it "does limited amounts of queries" do
-        assert_sql_queries(18) do
+        assert_sql_queries(17) do
           assert execute, out
         end
       end
@@ -340,6 +340,15 @@ describe Kubernetes::DeployExecutor do
           refute execute
         end
         e.message.must_include "Missing env variables [\"FOO\", \"BAR\"]"
+      end
+
+      it "fails before building when deploy groups are empty" do
+        stage.update(deploy_groups: [])
+
+        e = assert_raises Samson::Hooks::UserError do
+          refute execute
+        end
+        e.message.must_equal "No deploy groups are configured for this stage."
       end
 
       it "fails before building when role config is missing" do
@@ -977,6 +986,15 @@ describe Kubernetes::DeployExecutor do
 
     it "has no time left when past due" do
       executor.send(:time_left, Time.now.to_i - 10, 9).must_equal 0
+    end
+  end
+
+  describe "#resource_statuses" do
+    it "does not check status for static kinds" do
+      doc = Kubernetes::ReleaseDoc.new(kubernetes_role: Kubernetes::Role.new)
+      doc.send :resource_template=, [{"kind" => "Role"}]
+      executor.expects(:fetch_grouped).returns [] # no pods found ... ideally we should not even look for pods
+      executor.send(:resource_statuses, [doc]).must_equal []
     end
   end
 

@@ -1,0 +1,13 @@
+<% if @pagy.pages > 1 || params[:search] %>
+  <%= search_form top_pad: false do %>
+    <div class="col-sm-4">
+      <%= label_tag 'Name' %>
+      <%= text_field_tag 'search[name]', params.dig(:search, :name), class: "form-control" %>
+    </div>
+
+    <div class="col-sm-1">
+      <%= label_tag "failed" %>&nbsp;&nbsp;&nbsp;
+      <%= check_box_tag 'search[failed]', "true", params.dig(:search, :failed) %>
+    </div>
+  <% end %>
+<% end %>

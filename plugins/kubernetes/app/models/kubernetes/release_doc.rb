@@ -1,10 +1,6 @@
 # frozen_string_literal: true
 module Kubernetes
   class ReleaseDoc < ActiveRecord::Base
-    CRD_CREATING = {
-      "ConstraintTemplate" => [:spec, :crd] # OPA
-    }.freeze
-
     self.table_name = 'kubernetes_release_docs'
 
     belongs_to :kubernetes_role, class_name: 'Kubernetes::Role', inverse_of: false
@@ -22,6 +18,7 @@ module Kubernetes
 
     attr_reader :previous_resources
     attr_writer :deploy_group_role
+    attr_accessor :created_cluster_resources
 
     delegate :blue_green?, to: :kubernetes_role
 
@@ -70,19 +67,6 @@ module Kubernetes
       end
     end
 
-    # keep in sync with
-    def custom_resource_definitions
-      crds =
-        resource_template.select { |t| t[:kind] == "CustomResourceDefinition" } + # vanilla
-        CRD_CREATING.flat_map do |kind, nesting|
-          resource_template.select { |t| t[:kind] == kind }.map { |t| t.dig(*nesting) }
-        end
-
-      crds.each_with_object({}) do |crd, h|
-        h[crd.dig(:spec, :names, :kind)] = {"namespaced" => crd.dig(:spec, :scope) == "Namespaced"}
-      end
-    end
-
     # Temporary templates to run validations on ... so can be cheap / not fully fleshed out
     # we check main_only in here to avoid generating all the extra fillers just to throw them away
     def verification_templates(main_only: false)
@@ -125,7 +109,7 @@ module Kubernetes
         env = {}
 
         [:REVISION, :TAG, :DEPLOY_ID, :DEPLOY_GROUP].each do |k|
-          env[k.to_s] = deploy_metadata.fetch(k.downcase).to_s
+          env[k.to_s] = deploy_metadata.fetch(k.downcase).to_s.dup # .dup since nil.to_s is frozen ""
         end
 
         [:PROJECT, :ROLE].each do |k|
@@ -156,7 +140,6 @@ module Kubernetes
     def store_resource_template
       add_pod_disruption_budget
       counter = Hash.new(-1)
-      self.resource_template = raw_template # so we can look up custom_resource_definitions from TemplateFiller#to_hash
       self.resource_template = raw_template.map do |resource|
         index = (counter[resource.fetch(:kind)] += 1)
         TemplateFiller.new(self, resource, index: index).to_hash
