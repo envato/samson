@@ -1,8 +1,9 @@
-FROM ruby:2.7.6-slim
+FROM ruby:2.7.8-slim
 
 # Install dependencies
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
+RUN \
+  apt-get update && \
+  apt-get install -y --no-install-recommends \
     build-essential \
     default-libmysqlclient-dev \
     libpq-dev \
@@ -13,11 +14,13 @@ RUN apt-get update \
     openssh-client \
     curl \
     gnupg2 \
-  && curl -sL https://deb.nodesource.com/setup_12.x | bash - \
-  && apt-get install nodejs npm -y \
-  && rm -rf /var/lib/apt/lists/* \
-  && gem update --system 3.2.32 \
-  && curl -fsSL https://get.docker.com | bash -
+    nodejs \
+    npm && \
+  rm -rf /var/lib/apt/lists/*
+
+RUN gem update --system 3.3.25
+
+RUN curl -fsSL https://get.docker.com | bash -
 
 WORKDIR /app
 

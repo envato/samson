@@ -156,7 +156,7 @@ Prefer `spec.updateStrategy.type=RollingUpdate`
 ### Server-side apply
 
 Set `metadata.annotations.samson/server_side_apply='true'` and use a valid template.
-This only works for kubernetes 1.16+ clusters, but will soon be the default way samson works,
+This only works for kubernetes 1.16+ clusters,
 see [kubernetes docs](https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply) for details.
 
 ### Duplicate deployments
@@ -200,6 +200,15 @@ to make all kubernetes deploys that do not use a `metadata.labels.team` / `spec.
 Samson sets namespaces to the deploygroups `kubernetes_namespace` if no `metadata.namespace` is set in the resource.
 
 For namespace-less resources, set `metadata.namespace:` (which will result in `nil`)
+
+### Deployments without replicas
+
+When using a `HorizontalPodAutoscaler` for your `Deployment` or `StatefulSet`, it is recommended to not set `spec.replicas`.
+
+on the `Deployment`
+- set `metadata.annotations.samson/NoReplicas: "true"`
+- set `metadata.annotations.samson/server_side_apply: "true"`
+- do not set `spec.replicas`
 
 ### Using custom resource names
 
@@ -337,3 +346,12 @@ If a warning event fails deploys, but application owners deem them safe to ignor
 
 When using the namespaces UI to create new namespaces, set `KUBERNETES_COPY_SECRETS_TO_NEW_NAMESPACE=my-docker-auth,other-stuff`,
 it will then copy that secret from the `default` namespace to any newly created namespace.
+
+### Adding Well-Known Labels
+
+In accordance with [Kubernetes Well-Known Labels](https://kubernetes.io/docs/reference/labels-annotations-taints/#app-kubernetes-io-managed-by),
+Samson can set the labels:
+- `app.kubernetes.io/managed-by` to `samson`
+- `app.kubernetes.io/name` to the project permalink
+
+This feature can be enabled by setting `KUBERNETES_ADD_WELL_KNOWN_LABELS=true`.
