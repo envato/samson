@@ -5,7 +5,9 @@ module Kubernetes
     attr_reader :template
 
     SECRET_PULLER_IMAGE = ENV['SECRET_PULLER_IMAGE'].presence
+    SECRET_PULLER_TYPE = ENV.fetch('SECRET_PULLER_TYPE', 'samson_secret_puller')
     KUBERNETES_ADD_PRESTOP = Samson::EnvCheck.set?('KUBERNETES_ADD_PRESTOP')
+    KUBERNETES_ADD_WELL_KNOWN_LABELS = Samson::EnvCheck.set?('KUBERNETES_ADD_WELL_KNOWN_LABELS')
     SECRET_PREFIX = "secret/"
     DOCKERFILE_NONE = 'none'
     DEFAULT_TERMINATION_GRACE_PERIOD = 30
@@ -26,6 +28,7 @@ module Kubernetes
         set_project_labels if template.dig(:metadata, :annotations, :"samson/override_project_label")
         set_deploy_url
         set_update_timestamp
+        set_well_known_labels
 
         if RoleValidator::IMMUTABLE_NAME_KINDS.include?(kind)
           # names have a fixed pattern so we cannot override them
@@ -41,7 +44,13 @@ module Kubernetes
           make_stateful_set_match_service if kind == 'StatefulSet'
           set_pre_stop if kind == 'Deployment'
           set_name
-          (set_replica_target || validate_replica_target_is_supported) if kind != 'PodTemplate'
+          if ['Deployment', 'StatefulSet'].include?(kind)
+            set_replica_target
+          elsif kind == "PodTemplate"
+            # do nothing: the template has resources so setting to 0 is nice to make them not count in the math
+          else
+            validate_replica_target_is_supported
+          end
           set_spec_template_metadata
           set_docker_image unless verification
           set_resource_usage
@@ -73,8 +82,14 @@ module Kubernetes
     end
 
     def self.dig_path(path)
-      path = path.split(/\.(labels|annotations)\./) # make sure we do not split inside of labels or annotations
-      path[0..0] = path[0].split(".")
+      # make sure we do not split inside of labels or annotations
+      path = path.split(/\.(labels|annotations)\./)
+
+      # split on . but not on \\.
+      path[0..0] = path[0].split(/(?<=[^\\])\./)
+      path.map! { |k| k.gsub("\\.", ".") }
+
+      # support numbers for array index
       path.map! { |k| k.match?(/^\d+$/) ? Integer(k) : k.to_sym }
     end
 
@@ -200,11 +215,9 @@ module Kubernetes
     # TODO: unify into with label verification logic in role_validator
     def set_project_labels
       [
-        [:metadata, :labels],
+        *metadata_labels_paths,
         [:spec, :selector],
         [:spec, :selector, :matchLabels],
-        [:spec, :template, :metadata, :labels],
-        [:spec, :jobTemplate, :spec, :template, :metadata, :labels]
       ].each do |path|
         template.dig(*path)[:project] = project.permalink if template.dig(*path, :project)
       end
@@ -303,25 +316,46 @@ module Kubernetes
         image: SECRET_PULLER_IMAGE,
         imagePullPolicy: 'IfNotPresent',
         name: 'secret-puller',
-        volumeMounts: [
-          {mountPath: "/vault-auth", name: "vaultauth"},
-          {mountPath: "/secretkeys", name: "secretkeys"},
-          secret_vol
-        ],
         securityContext: {
           readOnlyRootFilesystem: true,
           runAsNonRoot: true
         },
-        env: [
+        resources: {
+          requests: {cpu: "100m", memory: "64Mi"},
+          limits: {cpu: "100m", memory: "100Mi"}
+        }
+      }
+
+      # Modifies init container to use internal secret-sidecar instead of
+      # public samson_secret_puller
+      if SECRET_PULLER_TYPE == 'secret-sidecar'
+        container[:command] = ['/bin/secret-sidecar-v2']
+
+        container[:volumeMounts] = [
+          {mountPath: "/secrets-meta", name: "secrets-meta"},
+          {mountPath: "/podinfo", name: "secretkeys"},
+          secret_vol
+        ]
+
+        container[:env] = [
+          {name: "VAULT_ADDR", valueFrom: {secretKeyRef: {name: "vaultauth", key: "address"}}},
+          {name: "VAULT_ROLE", value: project.permalink},
+          {name: "VAULT_TOKEN", valueFrom: {secretKeyRef: {name: "vaultauth", key: "authsecret"}}},
+          {name: "RUN_ONCE", value: "true"}
+        ]
+      else
+        container[:volumeMounts] = [
+          {mountPath: "/vault-auth", name: "vaultauth"},
+          {mountPath: "/secretkeys", name: "secretkeys"},
+          secret_vol
+        ]
+        container[:env] = [
           {name: "VAULT_TLS_VERIFY", value: vault_client.options.fetch(:ssl_verify).to_s},
           {name: "VAULT_MOUNT", value: Samson::Secrets::VaultClientManager::MOUNT},
           {name: "VAULT_PREFIX", value: Samson::Secrets::VaultClientManager::PREFIX}
-        ],
-        resources: {
-          requests: {cpu: "100m", memory: "64Mi"},
-          limits: {cpu: "100m", memory: "64Mi"}
-        }
-      }
+        ]
+      end
+
       init_containers.unshift container
 
       # mark the container as not needing a dockerfile
@@ -338,6 +372,7 @@ module Kubernetes
       volumes = (pod_template[:spec][:volumes] ||= [])
       volumes.concat [
         {name: secret_vol.fetch(:name), emptyDir: {medium: 'Memory'}},
+        {name: "secrets-meta", emptyDir: {medium: "Memory"}},
         {name: "vaultauth", secret: {secretName: "vaultauth"}},
         {
           name: "secretkeys",
@@ -356,17 +391,16 @@ module Kubernetes
     end
 
     def set_replica_target
-      key = [:spec, :replicas]
-      target =
-        if ['StatefulSet', 'Deployment'].include?(template[:kind])
-          template
-        else
-          # custom resource that has replicas set on itself or it's template
-          templates = [template] + (template[:spec] || {}).values_at(*RoleConfigFile.template_keys(template))
-          templates.detect { |c| c.dig(*key) }
+      if template.dig(:metadata, :annotations, :"samson/NoReplicas") == "true"
+        if template.dig(:spec, :replicas)
+          raise Samson::Hooks::UserError, "Do not set spec.replicas with NoReplicas"
         end
-
-      target&.dig_set key, @doc.replica_target
+        unless Kubernetes::Resource::Base.server_side_apply?(template)
+          raise Samson::Hooks::UserError, "Set metadata.annotations.samson/server_side_apply: 'true' with NoReplicas"
+        end
+      else
+        template.dig_set [:spec, :replicas], @doc.replica_target
+      end
     end
 
     def validate_replica_target_is_supported
@@ -624,6 +658,20 @@ module Kubernetes
       (template.dig(:metadata, :annotations) || {})[:"samson/updateTimestamp"] = Time.now.utc.iso8601
     end
 
+    def set_well_known_labels
+      return unless KUBERNETES_ADD_WELL_KNOWN_LABELS
+
+      metadata_labels_paths.each do |path|
+        next unless labels = template.dig(*path)
+
+        # always overwrite managed-by label since it is managed by samson
+        labels[:"app.kubernetes.io/managed-by"] = "samson"
+
+        # do not overwrite existing name label, if already set
+        labels[:"app.kubernetes.io/name"] ||= project.permalink
+      end
+    end
+
     def init_containers
       @init_containers ||= (pod_template ? Api::Pod.init_containers(pod_template) : [])
     end
@@ -634,6 +682,14 @@ module Kubernetes
 
     def all_containers
       pod_containers + init_containers
+    end
+
+    def metadata_labels_paths
+      [
+        [:metadata, :labels],
+        [:spec, :template, :metadata, :labels],
+        [:spec, :jobTemplate, :spec, :template, :metadata, :labels]
+      ]
     end
   end
 end

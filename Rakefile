@@ -52,7 +52,9 @@ end
 
 desc "'Run brakeman, use `bundle exec brakeman --add-engine-path 'plugins/*' -I` to add or remove obsolete ignores"
 task :brakeman do
-  system("brakeman --no-pager --add-engine-path 'plugins/*' --ensure-latest") ||
+  system("brakeman --no-pager --add-engine-path 'plugins/*'") ||
+    # TODO: Need to readd --ensure-latest once upgraded to ruby 3.0
+    # system("brakeman --no-pager --add-engine-path 'plugins/*' --ensure-latest") ||
     abort("Fix the found issues, or add new ignored with:\nbundle exec brakeman --add-engine-path 'plugins/*' -I")
 end
 
@@ -60,7 +62,8 @@ desc 'Scan for gem vulnerabilities'
 task :bundle_audit do
   # TODO: remove CVE-2015-9284 once https://github.com/omniauth/omniauth/pull/809 is resolved
   # TODO: remove CVE-2022-0759 once local development works on newer version
-  sh "bundle-audit check --update --ignore CVE-2015-9284 CVE-2022-0759"
+  # TODO: remove GHSA-hjp3-5g2q-7jww will need ruby 3.0
+  sh "bundle-audit check --update --ignore CVE-2015-9284 CVE-2022-0759 GHSA-hjp3-5g2q-7jww CVE-2023-34246"
 end
 
 desc "Run rubocop"

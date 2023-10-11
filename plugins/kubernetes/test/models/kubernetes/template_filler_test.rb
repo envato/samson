@@ -136,16 +136,6 @@ describe Kubernetes::TemplateFiller do
       result.dig(:spec, :template, :metadata, :annotations, :"samson/deploy_url").must_be :blank?
     end
 
-    it "sets replicas for templates" do
-      raw_template[:apiVersion] = "zendesk.com/v1alpha1"
-      raw_template[:kind] = "ShardedDeployment"
-      raw_template[:spec].delete :replicas
-      raw_template[:spec][:template][:spec][:replicas] = 1
-      result = template.to_hash
-      result[:spec][:replicas].must_be_nil
-      result[:spec][:template][:spec][:replicas].must_equal 2
-    end
-
     it "does not fail when env/secrets are missing during deletion" do
       raw_template[:spec][:template][:metadata][:annotations] = {"secret/FOO": "bar"}
       doc.replica_target = 0
@@ -169,13 +159,6 @@ describe Kubernetes::TemplateFiller do
     end
 
     describe "name" do
-      it "sets name for unknown non-primary kinds" do
-        raw_template[:apiVersion] = "zendesk.com/v1alpha1"
-        raw_template[:kind] = "ShardedDeployment"
-        raw_template[:spec][:template][:spec].delete(:containers)
-        template.to_hash[:metadata][:name].must_equal "test-app-server"
-      end
-
       it "keeps resource name when keep_name is set" do
         raw_template[:metadata][:name] = "foobar"
         raw_template[:metadata][:annotations] = {"samson/keep_name": 'true'}
@@ -212,7 +195,7 @@ describe Kubernetes::TemplateFiller do
       end
 
       it "alerts on unknown namespace" do
-        stub_request(:get, "http://foobar.server/apis/vwtf").to_return(status: 404)
+        stub_request(:get, "http://foobar.server/api/vwtf").to_return(status: 404)
         raw_template[:apiVersion] = "vwtf"
         e = assert_raises(Samson::Hooks::UserError) { template.to_hash }
         e.message.must_equal "Cluster \"test\" does not support vwtf Deployment (cached 1h)"
@@ -225,9 +208,36 @@ describe Kubernetes::TemplateFiller do
       end
 
       it "can read CRDs from currently deploying role" do
+        doc.replica_target = 1
         raw_template[:kind] = "MyCustomResource"
         doc.created_cluster_resources = {"MyCustomResource" => {"namespaced" => true}}
         template.to_hash[:metadata][:namespace].must_equal "pod1"
+      end
+    end
+
+    describe "NoReplicas" do
+      before do
+        raw_template[:spec].delete :replicas
+        raw_template[:metadata][:annotations] = {
+          "samson/NoReplicas": "true",
+          "samson/server_side_apply": "true"
+        }
+      end
+
+      it "can set no replicas" do
+        template.to_hash[:spec].keys.wont_include :replicas
+      end
+
+      it "warns when user set replicas which would be confusing" do
+        raw_template[:spec][:replicas] = 2
+        e = assert_raises(Samson::Hooks::UserError) { template.to_hash }
+        e.message.must_include "NoReplicas"
+      end
+
+      it "warns when server_side_apply is disabled, which would pick the default of 1" do
+        raw_template[:metadata][:annotations][:"samson/server_side_apply"] = "false"
+        e = assert_raises(Samson::Hooks::UserError) { template.to_hash }
+        e.message.must_include "NoReplicas"
       end
     end
 
@@ -669,12 +679,12 @@ describe Kubernetes::TemplateFiller do
 
       it "adds to existing volume definitions in the puller" do
         raw_template[:spec][:template][:spec][:volumes] = [{}]
-        template.to_hash[:spec][:template][:spec][:volumes].count.must_equal 4
+        template.to_hash[:spec][:template][:spec][:volumes].count.must_equal 5
       end
 
       it "does not duplicate definitions" do
         raw_template[:spec][:template][:spec][:volumes] = [{name: "vaultauth", secret: {secretName: "vaultauth"}}]
-        template.to_hash[:spec][:template][:spec][:volumes].count.must_equal 3
+        template.to_hash[:spec][:template][:spec][:volumes].count.must_equal 4
       end
 
       it "adds to existing volume definitions in the primary container" do
@@ -702,6 +712,18 @@ describe Kubernetes::TemplateFiller do
         e = assert_raises(Samson::Hooks::UserError) { template.to_hash }
         e.message.must_include "bar\n  (tried: production/foo/pod1/bar"
         e.message.must_include "baz\n  (tried: production/foo/pod1/baz" # shows all at once for easier debugging
+      end
+
+      it "with secret-sidecar" do
+        stub_const Kubernetes::TemplateFiller, :SECRET_PULLER_TYPE, "secret-sidecar" do
+          init_containers.first[:command].must_equal(['/bin/secret-sidecar-v2'])
+          init_containers.first[:env].must_equal [
+            {name: "VAULT_ADDR", valueFrom: {secretKeyRef: {name: "vaultauth", key: "address"}}},
+            {name: "VAULT_ROLE", value: "foo"},
+            {name: "VAULT_TOKEN", valueFrom: {secretKeyRef: {name: "vaultauth", key: "authsecret"}}},
+            {name: "RUN_ONCE", value: "true"}
+          ]
+        end
       end
 
       describe "converting secrets in env to annotations" do
@@ -792,6 +814,7 @@ describe Kubernetes::TemplateFiller do
       let(:image) { build.docker_repo_digest }
 
       before do
+        doc.replica_target = 1
         raw_template.replace(
           YAML.safe_load(
             read_kubernetes_sample_file('kubernetes_podtemplate.yml')
@@ -800,11 +823,17 @@ describe Kubernetes::TemplateFiller do
       end
 
       it "does not populate spec attribute" do
-        result.fetch(:spec, nil).must_be_nil
+        refute result.key? :spec
       end
 
       it "overrides image" do
         container.fetch(:image).must_equal image
+      end
+
+      it "allows 0 replicas" do
+        doc.replica_target = 0
+        result
+        refute result.key? :spec
       end
     end
 
@@ -905,6 +934,7 @@ describe Kubernetes::TemplateFiller do
         end
 
         it "does not add preStop to DaemonSet" do
+          doc.replica_target = 1
           raw_template[:kind] = 'DaemonSet'
           refute lifecycle_defined?
         end
@@ -950,7 +980,7 @@ describe Kubernetes::TemplateFiller do
 
     describe "PodDisruptionBudget" do
       before do
-        raw_template[:apiVersion] = 'policy/v1beta1'
+        raw_template[:apiVersion] = 'policy/v1'
         raw_template[:kind] = 'PodDisruptionBudget'
         raw_template[:spec][:template][:spec].delete(:containers)
       end
@@ -984,7 +1014,7 @@ describe Kubernetes::TemplateFiller do
       end
 
       it "modified budgets so we do not get errors when 2 budgets match the same pod" do
-        raw_template[:apiVersion] = 'policy/v1beta1'
+        raw_template[:apiVersion] = 'policy/v1'
         raw_template[:kind] = 'PodDisruptionBudget'
         raw_template[:spec].delete(:template)
         hash = template.to_hash
@@ -1030,6 +1060,13 @@ describe Kubernetes::TemplateFiller do
           "samson/set_via_env_json-metadata.annotations.foo.bar/baz" => "FOO"
         }
         template.to_hash[:metadata][:annotations][:"foo.bar/baz"].must_equal "bar"
+      end
+
+      it "can set arbitrary paths that include dots by escaping them" do
+        raw_template[:metadata][:annotations] = {
+          "samson/set_via_env_json-metadata.baz\\.zende\\.sk/foo" => "FOO"
+        }
+        template.to_hash[:metadata][:"baz.zende.sk/foo"].must_equal "bar"
       end
 
       it "sets labels with ." do
@@ -1165,6 +1202,38 @@ describe Kubernetes::TemplateFiller do
       it "sets updateTimestamp" do
         Time.stubs(:now).returns(Time.parse("2018-01-01"))
         template.to_hash[:metadata][:annotations][:"samson/updateTimestamp"].must_equal "2018-01-01T00:00:00Z"
+      end
+    end
+
+    describe "well known labels" do
+      around { |t| stub_const Kubernetes::TemplateFiller, :KUBERNETES_ADD_WELL_KNOWN_LABELS, true, &t }
+
+      it "adds app.kubernetes.io/managed-by label to resources and templates" do
+        result = template.to_hash
+        result.dig(:metadata, :labels, :"app.kubernetes.io/managed-by").must_equal "samson"
+        result.dig(:spec, :template, :metadata, :labels, :"app.kubernetes.io/managed-by").must_equal "samson"
+      end
+
+      it "adds app.kubernetes.io/managed-by label to jobTemplate template" do
+        raw_template.replace(YAML.safe_load(read_kubernetes_sample_file("kubernetes_cron_job.yml")).deep_symbolize_keys)
+        doc.replica_target = 1
+        result = template.to_hash
+        result.dig(:spec, :jobTemplate, :spec, :template, :metadata, :labels, :"app.kubernetes.io/managed-by").
+          must_equal "samson"
+      end
+
+      it "adds app.kubernetes.io/name label if not set" do
+        result = template.to_hash
+        result.dig(:metadata, :labels, :"app.kubernetes.io/name").must_equal project.permalink
+        result.dig(:spec, :template, :metadata, :labels, :"app.kubernetes.io/name").must_equal project.permalink
+      end
+
+      it "does not add app.kubernetes.io/name label if already set" do
+        raw_template[:metadata][:labels] = {"app.kubernetes.io/name": "Bar"}
+        raw_template[:spec][:template][:metadata][:labels] = {"app.kubernetes.io/name": "Bar"}
+        result = template.to_hash
+        result.dig(:metadata, :labels, :"app.kubernetes.io/name").must_equal "Bar"
+        result.dig(:spec, :template, :metadata, :labels, :"app.kubernetes.io/name").must_equal "Bar"
       end
     end
   end
