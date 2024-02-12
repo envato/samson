@@ -226,7 +226,7 @@ ActiveSupport::TestCase.class_eval do
 
   def self.only_callbacks_for_plugin(callback)
     line = caller(1..1).first
-    plugin_name = line[/\/plugins\/([^\/]+)/, 1] || raise("not called from a plugin not #{line}")
+    plugin_name = line[/^plugins\/([^\/]+)/, 1] || raise("not called from a plugin not #{line}")
     around { |t| Samson::Hooks.only_callbacks_for_plugin(plugin_name, callback, &t) }
   end
 
@@ -343,8 +343,8 @@ ActionController::TestCase.class_eval do
 
   # catch warden throw ... which would normally go into warden middleware and then be an unauthorized response
   prepend(Module.new do
-    def process(*args)
-      catch(:warden) { return super }
+    def process(...)
+      catch(:warden) { return super(...) }
       response.status = :unauthorized
       response.body = ":warden caught in test_helper.rb"
       response
