@@ -90,6 +90,12 @@ describe Kubernetes::ResourceStatus do
         expect_event_request { details.must_equal "Live" }
       end
 
+      it "ignores known bad events for statefulset" do
+        resource[:kind] = "StatefulSet"
+        events[0].merge!(type: "Warning", reason: "RecreatingFailedPod")
+        expect_event_request { details.must_equal "Live" }
+      end
+
       describe "with bad event" do
         before { events[0].merge!(type: "Warning", reason: "Boom") }
 
@@ -111,8 +117,13 @@ describe Kubernetes::ResourceStatus do
           expect_event_request { details.must_equal "Error event" }
         end
 
-        it "ignores karmada sync" do
+        it "ignores karmada sync for policy failed" do
           events[0][:reason] = "ApplyPolicyFailed"
+          expect_event_request { details.must_equal "Live" }
+        end
+
+        it "ignores karmada syn for sync failed" do
+          events[0][:reason] = "SyncFailed"
           expect_event_request { details.must_equal "Live" }
         end
       end
