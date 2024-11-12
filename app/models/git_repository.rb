@@ -185,15 +185,13 @@ class GitRepository
   # error: nil
   def capture_stdout(*command, dir: repo_cache_dir)
     ::Rails.logger.info("Running command #{command}")
-    result = Samson::CommandExecutor.execute(
+    success, output, error = Samson::CommandExecutor.execute(
       *command,
       whitelist_env: ['HOME', 'PATH'],
       timeout: 30.minutes,
       dir: dir
     )
-    unless result.status
-      ::Rails.logger.error("Failed to run command #{command}: #{result.error}")
-    end
-    result.output.strip if result.status
+    ::Rails.logger.error("Failed to run command #{command}: #{error}") unless success
+    output.strip if success
   end
 end

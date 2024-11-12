@@ -88,12 +88,12 @@ module SamsonGcloud
       # NOTE: not using executor since it does not return output
       def image_exists_in_gcloud?(repo_digest)
         image, digest = repo_digest.split('@')
-        result = Samson::CommandExecutor.execute(
+        output = Samson::CommandExecutor.execute(
           "gcloud", "container", "images", "list-tags", image,
           "--format", "get(digest)", "--filter", "digest=#{digest}", *SamsonGcloud.cli_options,
           timeout: 10
-        )
-        result.output.strip == digest
+        ).second
+        output.strip == digest
       end
     end
   end

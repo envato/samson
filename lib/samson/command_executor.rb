@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require 'tempfile'
 
 module Samson
@@ -22,28 +23,14 @@ module Samson
               pio = IO.popen(env, command.map(&:to_s), popen_options)
               output = pio.read
               pio.close
-              result = OpenStruct.new(
-                output: output,
-                error: File.read(stderr),
-                status: $?.success?
-              )
-              pio.close
-              result
+              [$?.success?, output, File.read(stderr)]
             rescue Errno::ENOENT
-              OpenStruct.new(
-                error: "No such file or directory - #{command.first}",
-                status: false,
-                output: ""
-              )
+              [false, "", "No such file or directory - #{command.first}"]
             end
           end
         end
       rescue Timeout::Error
-        OpenStruct.new(
-          error: $!.message,
-          status: false,
-          output: ""
-        )
+        [false, "", $!.message]
       ensure
         if pio && !pio.closed?
           kill_process pio.pid
