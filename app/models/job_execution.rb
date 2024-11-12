@@ -181,7 +181,6 @@ class JobExecution
       found
     end
     tag = @repository.fuzzy_tag_from_ref(source)
-
     if commit
       @job.update_git_references!(commit: commit, tag: tag)
 

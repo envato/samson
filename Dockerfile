@@ -18,8 +18,6 @@ RUN \
     npm && \
   rm -rf /var/lib/apt/lists/*
 
-RUN gem update --system 3.3.25
-
 RUN curl -fsSL https://get.docker.com | bash -
 
 WORKDIR /app
