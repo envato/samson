@@ -101,6 +101,12 @@ describe GitRepository do
       repository.commit_from_ref('NOT A VALID REF').must_be_nil
     end
 
+    it 'logs an error if ref does not exist' do
+      create_repo_with_tags
+      Rails.logger.expects(:error).with { |message| message.must_match(/^Failed to run command/) }
+      repository.commit_from_ref('NOT A VALID REF')
+    end
+
     it 'returns the commit of a branch' do
       create_repo_with_an_additional_branch('my_branch')
       repository.commit_from_ref('my_branch').must_match /^[0-9a-f]{40}$/
@@ -310,12 +316,12 @@ describe GitRepository do
       end
 
       it "caches" do
-        Samson::CommandExecutor.expects(:execute).times(2).returns([true, "x", ""])
+        Samson::CommandExecutor.expects(:execute).times(2).returns([true, "x"])
         4.times { repository.file_content('foo', sha).must_equal "x" }
       end
 
       it "caches sha too" do
-        Samson::CommandExecutor.expects(:execute).times(3).returns([true, "x", ""])
+        Samson::CommandExecutor.expects(:execute).times(3).returns([true, "x"])
         4.times { |i| repository.file_content("foo-#{i.odd?}", sha).must_equal "x" }
       end
 
@@ -344,7 +350,7 @@ describe GitRepository do
         it "does not cache when requesting for an update" do
           repository.unstub(:ensure_mirror_current)
           repository.expects(:ensure_mirror_current)
-          Samson::CommandExecutor.expects(:execute).times(2).returns([true, "x", ""])
+          Samson::CommandExecutor.expects(:execute).times(2).returns([true, "x"])
           repository.file_content('foo', 'HEAD', pull: false).must_equal "x"
           4.times { repository.file_content('foo', 'HEAD', pull: true).must_equal "x" }
         end

@@ -1,4 +1,7 @@
 # frozen_string_literal: true
+
+require 'tempfile'
+
 # Responsible for all git knowledge of a repo
 # Caches a local mirror (not a full checkout) and creates a workspace when deploying
 class GitRepository
@@ -184,14 +187,17 @@ class GitRepository
   # success: stdout as string
   # error: nil
   def capture_stdout(*command, dir: repo_cache_dir)
-    ::Rails.logger.info("Running command #{command}")
-    success, output, error = Samson::CommandExecutor.execute(
-      *command,
-      whitelist_env: ['HOME', 'PATH'],
-      timeout: 30.minutes,
-      dir: dir
-    )
-    ::Rails.logger.error("Failed to run command #{command}: #{error}") unless success
-    output.strip if success
+    Tempfile.create('git-stderr') do |error_file|
+      Rails.logger.info("Running command #{command}")
+      success, output = Samson::CommandExecutor.execute(
+        *command,
+        whitelist_env: ['HOME', 'PATH'],
+        timeout: 30.minutes,
+        err: error_file.path,
+        dir: dir
+      )
+      Rails.logger.error("Failed to run command #{command}: #{error_file.read}") unless success
+      output.strip if success
+    end
   end
 end

@@ -10,14 +10,14 @@ module SamsonGcloud
         return unless SamsonGcloud.gcr? image
         return if image.match? Build::DIGEST_REGEX
 
-        success, json, error = Samson::CommandExecutor.execute(
+        success, json = Samson::CommandExecutor.execute(
           "gcloud", "container", "images", "describe", image, "--format", "json",
           *SamsonGcloud.cli_options,
           err: '/dev/null',
           timeout: 10,
           whitelist_env: ["PATH"]
         )
-        raise "GCLOUD ERROR: unable to resolve #{image}\n#{error}" unless success
+        raise "GCLOUD ERROR: unable to resolve #{image}\n#{json}" unless success
         digest = JSON.parse(json).dig_fetch("image_summary", "digest")
 
         base = image.split(":", 2).first

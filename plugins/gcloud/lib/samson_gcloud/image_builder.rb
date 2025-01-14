@@ -92,7 +92,7 @@ module SamsonGcloud
           "gcloud", "container", "images", "list-tags", image,
           "--format", "get(digest)", "--filter", "digest=#{digest}", *SamsonGcloud.cli_options,
           timeout: 10
-        ).second
+        ).last
         output.strip == digest
       end
     end
