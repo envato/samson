@@ -21,7 +21,7 @@
     "x-editable": "1.5.1"
   },
   "devDependencies": {
-    "jshint": "~2.9.2"
+    "jshint": "~2.13.6"
   },
   "scripts": {
     "jshint": "./node_modules/.bin/jshint app/assets/javascripts/*",
