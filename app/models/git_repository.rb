@@ -188,6 +188,7 @@ class GitRepository
   # error: nil
   def capture_stdout(*command, dir: repo_cache_dir)
     Tempfile.create('git-stderr') do |error_file|
+      Rails.logger.info("Running command #{command}")
       success, output = Samson::CommandExecutor.execute(
         *command,
         whitelist_env: ['HOME', 'PATH'],
