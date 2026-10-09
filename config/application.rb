@@ -215,6 +215,9 @@ module Samson
       end
     end
 
+    # front-end libraries are installed by npm (see package.json) and served through sprockets
+    config.assets.paths << Rails.root.join("node_modules")
+
     # without it `rake assets:precompile` fails
     ActiveRecord.legacy_connection_handling = false
 

@@ -92,19 +92,6 @@ group :assets do
   gem 'bootstrap-sass', '>= 3.4.1'
   gem 'momentjs-rails'
   gem 'bootstrap3-datetimepicker-rails'
-
-  source 'https://rails-assets.org' do
-    gem 'rails-assets-bootstrap-select'
-    gem 'rails-assets-jquery'
-    gem 'rails-assets-jquery-ui'
-    gem 'rails-assets-jquery-ujs'
-    gem 'rails-assets-typeahead.js'
-    gem 'rails-assets-underscore'
-    gem 'rails-assets-x-editable'
-    gem 'rails-assets-jstimezonedetect'
-    gem 'rails-assets-jquery-cookie'
-    gem 'rails-assets-jsSHA'
-  end
 end
 
 group :debugging do
