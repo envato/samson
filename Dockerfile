@@ -29,9 +29,9 @@ COPY public public
 COPY db db
 COPY .env.bootstrap .env
 
-# NPM
-COPY package.json ./
-RUN npm install --silent >/dev/null
+# NPM (front-end libraries used by the asset pipeline)
+COPY package.json package-lock.json ./
+RUN npm ci --silent >/dev/null
 
 # Gems
 COPY Gemfile Gemfile.lock ./

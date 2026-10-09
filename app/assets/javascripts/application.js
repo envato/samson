@@ -10,23 +10,23 @@
 // Read Sprockets README (https://github.com/sstephenson/sprockets#sprockets-directives) for details
 // about supported directives.
 //
-//= require jsSHA
+//= require jssha/src/sha
 //= require instant_errors
-//= require jquery
-//= require jquery-ujs
-//= require jquery-cookie
-//= require jquery-ui
-//= require underscore
+//= require jquery/dist/jquery
+//= require jquery-ujs/src/rails
+//= require jquery.cookie/jquery.cookie
+//= require jquery-ui/dist/jquery-ui
+//= require underscore/underscore-umd
 //= require moment
 //= require bootstrap/alert
 //= require bootstrap/dropdown
 //= require bootstrap/tab
 //= require bootstrap/tooltip
 //= require bootstrap/popover
-//= require bootstrap-select
+//= require bootstrap-select/dist/js/bootstrap-select
 //= require bootstrap-datetimepicker
 //= require x-editable/dist/bootstrap3-editable/js/bootstrap-editable
 //= require cable
 //= require underscore_mixins
-//= require jstimezonedetect
+//= require jstimezonedetect/jstz
 //= require_tree .
