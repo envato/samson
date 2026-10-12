@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 source 'https://rubygems.org'
 
-ruby File.read('.ruby-version').strip
-
 # gems that have rails engines are are always needed
 group :preload do
   rails_version = '~> 7.0.8'
