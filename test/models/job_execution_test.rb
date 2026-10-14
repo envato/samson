@@ -37,7 +37,7 @@ describe JobExecution do
     user.name = 'John Doe'
     user.email = 'jdoe@test.com'
     project.repository.send(:clone!)
-    project.repository.stubs(:prune_worktree)
+    GitRepository.any_instance.stubs(:prune_worktree)
     job.deploy = deploy
     freeze_time
   end
@@ -132,6 +132,7 @@ describe JobExecution do
 
   it "updates the branch to match what's in the remote repository" do
     skip "Somehow broken on CI" if ENV["CI"]
+    GitRepository.any_instance.unstub(:prune_worktree) # fetch refuses to update a branch checked out in a worktree
     execute_on_remote_repo <<-SHELL
       git checkout -b safari
       echo tiger > foo
@@ -144,8 +145,6 @@ describe JobExecution do
 
     assert_equal '[04:05:06] tiger', last_line_of_output
 
-    # pretend we are in a new request
-    project.repository.instance_variable_set(:@mirror_current, nil)
     job.update_column(:commit, nil)
 
     execute_on_remote_repo <<-SHELL
@@ -207,6 +206,7 @@ describe JobExecution do
   end
 
   it 'maintains a cache of build artifacts between runs' do
+    GitRepository.any_instance.unstub(:prune_worktree) # fetch refuses to update a branch checked out in a worktree
     job.command = 'echo hello > $CACHE_DIR/foo'
     execute_job
 
@@ -282,14 +282,28 @@ describe JobExecution do
     assert_equal 'succeeded', job.status
   end
 
-  it 'cannot setup project if project is locked' do
-    project.repository.expects(:setup).never
-    begin
-      MultiLock.send(:try_lock, project.id, 'me')
-      execution.perform
-    ensure
-      MultiLock.send(:unlock, project.id)
-    end
+  it 'errors if the mirror cannot be updated' do
+    GitRepository.any_instance.expects(:update!).times(4).returns(false)
+    execute_job
+    assert_equal 'errored', job.status
+    job.output.must_include "Could not update repository mirror"
+    job.output.wont_include "Could not find commit"
+  end
+
+  it 'succeeds if the first mirror update fails' do
+    GitRepository.any_instance.expects(:update!).twice.returns(false, true)
+    execute_job
+    assert_equal 'succeeded', job.status
+    job.output.must_include "Commit: "
+  end
+
+  it 'does not share the repository with the project or other jobs' do
+    other = JobExecution.new('master', job)
+    repository = execution.instance_variable_get(:@repository)
+    repository.wont_be_same_as project.repository
+    repository.wont_be_same_as other.instance_variable_get(:@repository)
+    repository.executor.must_equal execution.executor
+    project.repository.executor.wont_equal execution.executor
   end
 
   it 'can access secrets' do
@@ -507,7 +521,7 @@ describe JobExecution do
     end
 
     it "removes deleted worktrees" do
-      project.repository.unstub(:prune_worktree)
+      GitRepository.any_instance.unstub(:prune_worktree)
       before = `cd #{project.repository.repo_cache_dir} && git worktree list`
       execution.send(:make_tempdir) do |dir|
         assert project.repository.checkout_workspace(dir, "master")

@@ -65,10 +65,28 @@ describe GitRepository do
       assert system("rm -rf #{repository.repo_cache_dir}/*")
 
       refute call
+    end
 
-      # caches false
-      repository.expects(:update!).never
+    it 'does not cache a failed update so it can recover' do
+      create_repo_with_tags
+      assert repository.send(:clone!)
+      repository.expects(:update!).returns(false)
       refute call
+
+      repository.expects(:update!).returns(true)
+      assert call
+
+      repository.expects(:update!).never
+      assert call
+    end
+
+    it 'does not cache a failed clone so it can recover' do
+      create_repo_with_tags
+      repository.expects(:clone!).returns(false)
+      refute call
+
+      repository.expects(:clone!).returns(true)
+      assert call
     end
 
     it "is called from all public methods" do
@@ -81,6 +99,26 @@ describe GitRepository do
         next if ["initialize", "repo_cache_dir", "clean!", "valid_url?"].include?(name)
         body.must_include "ensure_mirror_current", "Expected #{name} to update the repo with ensure_mirror_current"
       end
+    end
+  end
+
+  describe "#update_mirror" do
+    it 'marks the mirror as current when it succeeds' do
+      create_repo_with_tags
+      assert repository.update_mirror
+
+      repository.expects(:update!).never
+      assert repository.send(:ensure_mirror_current)
+    end
+
+    it 'leaves the mirror stale when it fails' do
+      create_repo_with_tags
+      assert repository.send(:clone!)
+      repository.expects(:update!).returns(false)
+      refute repository.update_mirror
+
+      repository.expects(:update!).returns(true)
+      assert repository.send(:ensure_mirror_current)
     end
   end
 
@@ -313,6 +351,14 @@ describe GitRepository do
       it "updates when sha is missing" do
         repository.expects(:ensure_mirror_current)
         repository.file_content('foo', 'a' * 40).must_be_nil
+      end
+
+      it "updates again after a failed update" do
+        repository.expects(:update!).returns(false)
+        repository.file_content('foo', 'a' * 40).must_be_nil
+
+        repository.expects(:update!).returns(true)
+        repository.file_content('bar', 'a' * 40).must_be_nil
       end
 
       it "caches" do

@@ -31,8 +31,8 @@ class JobExecution
     @finish_callbacks = []
     @finished = false
 
-    @repository = @job.project.repository
-    @repository.executor = @executor
+    # own instance so this job's mirror state and command output are its own
+    @repository = @job.project.build_repository(executor: @executor)
     @repository.full_checkout = true if @stage&.full_checkout
   end
 
@@ -101,7 +101,7 @@ class JobExecution
 
   # also used for docker builds
   def base_commands(dir, env = {})
-    artifact_cache_dir = File.join(@job.project.repository.repo_cache_dir, "artifacts")
+    artifact_cache_dir = File.join(@repository.repo_cache_dir, "artifacts")
     FileUtils.mkdir_p(artifact_cache_dir)
     env[:CACHE_DIR] = artifact_cache_dir
 
@@ -175,19 +175,22 @@ class JobExecution
   end
 
   def resolve_ref_to_commit(source)
+    updated = false
     commit = Samson::Retry.until_result tries: 4, wait_time: 1, error: nil do
-      found = @repository.commit_from_ref(source)
-      @repository.update_mirror unless found # next try will find it ...
-      found
+      updated = @repository.update_mirror
+      updated && @repository.commit_from_ref(source)
     end
-    tag = @repository.fuzzy_tag_from_ref(source)
     if commit
+      tag = @repository.fuzzy_tag_from_ref(source)
       @job.update_git_references!(commit: commit, tag: tag)
 
       @output.puts("Commit: #{commit}")
       true
-    else
+    elsif updated
       @output.puts("Could not find commit for #{source}")
+      false
+    else
+      @output.puts("Could not update repository mirror")
       false
     end
   end
