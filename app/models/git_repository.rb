@@ -86,8 +86,11 @@ class GitRepository
     end
   end
 
+  # @returns [true, false]
   def update_mirror
-    exclusive { (mirrored? ? update! : clone!) }
+    updated = exclusive { (mirrored? ? update! : clone!) }
+    @mirror_current = true if updated
+    updated
   end
 
   # clear worktrees that are deleted
@@ -99,14 +102,14 @@ class GitRepository
 
   attr_reader :repository_url, :repository_directory
 
+  # a failed update is not remembered so the next call tries again
   # @returns [true, false]
   def ensure_mirror_current
-    return @mirror_current if mirror_current?
-    @mirror_current = update_mirror
+    mirror_current? || update_mirror
   end
 
   def mirror_current?
-    !@mirror_current.nil?
+    !!@mirror_current
   end
 
   # makes sure that only 1 repository is doing mirror/clone at any given time

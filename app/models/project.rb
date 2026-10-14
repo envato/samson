@@ -174,11 +174,16 @@ class Project < ActiveRecord::Base
     releases.where('id < ?', release.id).order(:id).last
   end
 
+  # shared instance for quick lookups, jobs build their own via build_repository
   def repository
-    @repository ||= GitRepository.new(
+    @repository ||= build_repository(executor: TerminalExecutor.new(StringIO.new, project: self))
+  end
+
+  def build_repository(executor:)
+    GitRepository.new(
       repository_url: repository_url,
       repository_dir: repository_directory,
-      executor: TerminalExecutor.new(StringIO.new, project: self)
+      executor: executor
     )
   end
 

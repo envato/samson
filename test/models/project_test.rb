@@ -95,6 +95,16 @@ describe Project do
     end
   end
 
+  describe "#build_repository" do
+    it "builds a separate repository that reports to the given executor" do
+      executor = TerminalExecutor.new(StringIO.new, project: project)
+      repository = project.build_repository(executor: executor)
+      repository.executor.must_equal executor
+      repository.repo_cache_dir.must_equal project.repository.repo_cache_dir
+      repository.wont_be_same_as project.repository
+    end
+  end
+
   describe "#repo_commit_from_ref" do
     it "asks github" do
       stub_github_api "repos/bar/foo/commits/master", sha: "abc"

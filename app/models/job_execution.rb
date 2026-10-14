@@ -31,8 +31,8 @@ class JobExecution
     @finish_callbacks = []
     @finished = false
 
-    @repository = @job.project.repository
-    @repository.executor = @executor
+    # own instance so jobs do not share mirror state or output with each other or the project
+    @repository = @job.project.build_repository(executor: @executor)
     @repository.full_checkout = true if @stage&.full_checkout
   end
 
