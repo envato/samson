@@ -80,6 +80,15 @@ describe GitRepository do
       assert call
     end
 
+    it 'does not cache a failed clone so it can recover' do
+      create_repo_with_tags
+      repository.expects(:clone!).returns(false)
+      refute call
+
+      repository.expects(:clone!).returns(true)
+      assert call
+    end
+
     it "is called from all public methods" do
       file = File.read("app/models/git_repository.rb")
       public = file.split(/^  private$/).first
@@ -342,6 +351,14 @@ describe GitRepository do
       it "updates when sha is missing" do
         repository.expects(:ensure_mirror_current)
         repository.file_content('foo', 'a' * 40).must_be_nil
+      end
+
+      it "updates again after a failed update" do
+        repository.expects(:update!).returns(false)
+        repository.file_content('foo', 'a' * 40).must_be_nil
+
+        repository.expects(:update!).returns(true)
+        repository.file_content('bar', 'a' * 40).must_be_nil
       end
 
       it "caches" do

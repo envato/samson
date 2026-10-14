@@ -28,8 +28,6 @@ class DockerBuilderService
       end
     end
 
-    @build.project.repository.executor = @execution.executor
-
     @execution.on_finish do
       @build.update_column(:finished_at, Time.now)
       Samson::Hooks.fire(:after_docker_build, @build)

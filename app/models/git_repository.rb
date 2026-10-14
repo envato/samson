@@ -7,7 +7,7 @@ require 'tempfile'
 class GitRepository
   extend ::Samson::PerformanceTracer::Tracers
 
-  attr_accessor :executor # others set this to listen in on commands being executed
+  attr_reader :executor # receives all command output, see Project#build_repository for using another
   attr_accessor :full_checkout
 
   # The directory in which repositories should be cached.
@@ -86,7 +86,8 @@ class GitRepository
     end
   end
 
-  # @returns [true, false]
+  # sets @mirror_current only on success, so a failed update is retried by the next call
+  # @return [true, false]
   def update_mirror
     updated = exclusive { (mirrored? ? update! : clone!) }
     @mirror_current = true if updated
@@ -102,8 +103,7 @@ class GitRepository
 
   attr_reader :repository_url, :repository_directory
 
-  # a failed update is not remembered so the next call tries again
-  # @returns [true, false]
+  # @return [true, false]
   def ensure_mirror_current
     mirror_current? || update_mirror
   end
@@ -114,7 +114,7 @@ class GitRepository
 
   # makes sure that only 1 repository is doing mirror/clone at any given time
   # also print to the job output when we are waiting for a lock so user knows to be patient
-  # @returns block result or false on lock timeout
+  # @return block result or false on lock timeout
   def exclusive(timeout: 10.minutes)
     counter = 0
     log_wait = proc do |owner|

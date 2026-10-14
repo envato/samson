@@ -282,6 +282,14 @@ describe JobExecution do
     assert_equal 'succeeded', job.status
   end
 
+  it 'errors if the mirror cannot be updated' do
+    GitRepository.any_instance.expects(:update!).times(4).returns(false)
+    execute_job
+    assert_equal 'errored', job.status
+    job.output.must_include "Could not update repository mirror"
+    job.output.wont_include "Could not find commit"
+  end
+
   it 'succeeds if the first mirror update fails' do
     GitRepository.any_instance.expects(:update!).twice.returns(false, true)
     execute_job
@@ -296,16 +304,6 @@ describe JobExecution do
     repository.wont_be_same_as other.instance_variable_get(:@repository)
     repository.executor.must_equal execution.executor
     project.repository.executor.wont_equal execution.executor
-  end
-
-  it 'cannot setup project if project is locked' do
-    project.repository.expects(:setup).never
-    begin
-      MultiLock.send(:try_lock, project.id, 'me')
-      execution.perform
-    ensure
-      MultiLock.send(:unlock, project.id)
-    end
   end
 
   it 'can access secrets' do

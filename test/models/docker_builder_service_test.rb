@@ -39,6 +39,13 @@ describe DockerBuilderService do
       service.run
     end
 
+    it "leaves the project's shared repository executor alone" do
+      executor = project.repository.executor
+      call
+      project.repository.executor.must_equal executor
+      job.executor.wont_equal executor
+    end
+
     it "deletes previous build job" do
       build.docker_build_job = jobs(:succeeded_test)
       call
