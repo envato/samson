@@ -15,6 +15,7 @@ if token = ENV['ROLLBAR_ACCESS_TOKEN']
       config.code_version = version.first(7) if version
       config.populate_empty_backtraces = true
       config.logger = Rails.logger
+      config.scrub_headers |= [ENV['ROLLBAR_SCRUB_EXTRA_HEADER']] if ENV['ROLLBAR_SCRUB_EXTRA_HEADER']
 
       # ignore errors we do not want to send to Rollbar
       config.before_process << proc do |options|
